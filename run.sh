@@ -4,6 +4,8 @@
 #
 #   ./run.sh                       run every test
 #   ./run.sh basic/hello-world     run specific tests
+#   NO_TIME=1 ./run.sh             build and check outputs only, no hyperfine
+#                                  (used by CI; leaves no times.csv)
 #
 # A test is any directory with an expected.txt (the exact stdout every
 # language must produce). Sources live in <test>/<lang>/main.<ext>; a
@@ -75,6 +77,9 @@ run_test() {
     echo "$row| ${libs// /,}"
   done
 
+  if [[ ${NO_TIME:-} == 1 ]]; then
+    return 0
+  fi
   time_test "$t" ${args[@]+"${args[@]}"}
 }
 

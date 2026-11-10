@@ -1,0 +1,88 @@
+# Checks that every program builds and prints expected.txt, and that the
+# dashboard serves its pages. It does not time anything: shared runners are
+# too noisy for benchmark numbers, which come from ./run.sh on a quiet machine.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and check outputs (macOS arm64)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - name: Toolchains
+        run: |
+          clang --version | head -1
+          swiftc --version 2>&1 | head -1
+          zig version
+          rustc --version
+          go version
+      - name: Build every test in both profiles and check its output
+        run: NO_TIME=1 ./run.sh
+      - name: Keep binary sizes and build times
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sizes
+          path: build/**/*.csv
+          if-no-files-found: ignore
+
+  dashboard:
+    name: Dashboard (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        php: ['8.1', 'latest']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Syntax
+        run: |
+          bash -n run.sh lib/langs.sh dashboard-start.sh dashboard-stop.sh
+          find dashboard -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Serves every page without PHP errors
+        run: |
+          php -S 127.0.0.1:8765 -t dashboard/public dashboard/public/index.php > php.log 2>&1 &
+          for _ in $(seq 50); do curl -fs -o /dev/null http://127.0.0.1:8765/ && break; sleep 0.1; done
+          check() {
+            code=$(curl -s --path-as-is -o page.html -w '%{http_code}' "http://127.0.0.1:8765$1")
+            echo "$1 -> $code"
+            [ "$code" = "$2" ] || { echo "::error::$1 returned $code, expected $2"; exit 1; }
+            if grep -qiE '(warning|fatal error|deprecated|notice)(</b>)?:' page.html; then
+              echo "::error::PHP error in $1"; grep -iE 'warning|fatal|deprecated|notice' page.html; exit 1
+            fi
+          }
+          check / 200
+          check /languages 200
+          check /toolchains 200
+          check /tests/basic/hello-world 200
+          check /tests/speed/sieve/ 200
+          check /assets/app.css 200
+          check /nope 404
+          check /assets/../index.php 404
+          if grep -qiE 'warning|fatal|deprecated' php.log; then cat php.log; exit 1; fi

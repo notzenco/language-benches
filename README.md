@@ -6,6 +6,7 @@ way and compared. Target: macOS arm64.
 ```
 ./run.sh                     # every test
 ./run.sh basic/hello-world   # one or more tests
+NO_TIME=1 ./run.sh           # build and check outputs only, no timing
 ```
 
 ## Layout
@@ -155,3 +156,18 @@ code are globals, and every access is checked at run time, which made
 Add it to `LANGS` and give it one `compile` case per profile and a
 `toolchain_version` case in `lib/langs.sh`. Add its display name to
 `LANG_NAMES` in `dashboard/src/bootstrap.php`.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request and push to `main`.
+On a macOS arm64 runner it builds every test in both profiles and checks
+each program's output (`NO_TIME=1 ./run.sh`); on Linux it serves every
+dashboard page under PHP 8.1 and the latest PHP and fails on any PHP error.
+It does not time anything: shared runners are too noisy, so the results
+above come from a local run on a quiet machine. Toolchain versions in CI
+follow the runner (Swift comes with its Xcode), so they can differ from
+the snapshot.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

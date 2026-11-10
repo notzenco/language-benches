@@ -35,7 +35,7 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN > /dev/null 2>&1; then
   exit 1
 fi
 
-nohup php -S "$HOST:$PORT" -t "$ROOT/dashboard" >> "$LOG" 2>&1 &
+nohup php -S "$HOST:$PORT" -t "$ROOT/dashboard/public" "$ROOT/dashboard/public/index.php" >> "$LOG" 2>&1 &
 pid=$!
 echo "$pid" > "$PIDFILE"
 
